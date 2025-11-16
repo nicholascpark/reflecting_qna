@@ -1,3 +1,5 @@
+## Bonus 1: I wish I had taken the time to build a proper ontology and knowledge graph, since that structure would have significantly improved the app’s retrieval accuracy by giving it explicit entities, attributes, and relationships to reason over rather than relying solely on embeddings.
+
 # Member QnA API
 
 AI-powered question-answering system for member messages. Ask questions in plain English and get instant answers.
