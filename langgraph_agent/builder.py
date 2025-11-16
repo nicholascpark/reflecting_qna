@@ -49,31 +49,32 @@ class QnAAgent:
     def __init__(
         self,
         api_url: str = MESSAGES_API_URL,
-        llm_model: str = "gpt-4o-mini",
+        llm_model: str = "gpt-5-nano",
         embedding_model: str = "text-embedding-3-small",
         openai_api_key: Optional[str] = None,
         index_dir: str = "./faiss_index",
-        k: int = 10,
-        doc_strategy: str = "hybrid",
+        k: int = None,
+        doc_strategy: str = None,
     ):
         """
         Initialize the RAG-based QnA agent.
         
         Args:
             api_url: URL of the messages API
-            llm_model: Name of the OpenAI LLM model (default: gpt-4o-mini)
+            llm_model: Name of the OpenAI LLM model (default: gpt-5-nano)
             embedding_model: Name of the OpenAI embedding model (default: text-embedding-3-small)
             openai_api_key: OpenAI API key (defaults to env var)
             index_dir: Directory to save/load FAISS index
-            k: Number of documents to retrieve per query (default: 10 for better coverage)
-            doc_strategy: Document creation strategy - "individual", "aggregated", or "hybrid" (default: hybrid)
+            k: Number of documents to retrieve per query (default: from env or 5)
+            doc_strategy: Document creation strategy - "individual", "aggregated", or "hybrid" (default: from env or individual)
         """
         self.api_url = api_url
         self.llm_model = llm_model
         self.embedding_model = embedding_model
         self.index_dir = index_dir
-        self.k = k
-        self.doc_strategy = doc_strategy
+        # Use environment variables for memory optimization
+        self.k = k if k is not None else int(os.getenv("RETRIEVAL_K", "5"))
+        self.doc_strategy = doc_strategy if doc_strategy is not None else os.getenv("DOC_STRATEGY", "individual")
         
         api_key = openai_api_key or OPENAI_API_KEY
         
@@ -172,10 +173,10 @@ class QnAAgent:
 
 def create_agent(
     api_url: str = MESSAGES_API_URL,
-    llm_model: str = "gpt-4o-mini",
+    llm_model: str = "gpt-5-nano",
     embedding_model: str = "text-embedding-3-small",
-    k: int = 10,
-    doc_strategy: str = "hybrid",
+    k: int = None,
+    doc_strategy: str = None,
 ) -> QnAAgent:
     """
     Factory function to create a RAG-based QnA agent instance.
@@ -184,8 +185,8 @@ def create_agent(
         api_url: URL of the messages API
         llm_model: Name of the OpenAI LLM model
         embedding_model: Name of the OpenAI embedding model
-        k: Number of documents to retrieve per query (default: 10)
-        doc_strategy: Document creation strategy (default: hybrid)
+        k: Number of documents to retrieve per query (default: from env or 5)
+        doc_strategy: Document creation strategy (default: from env or individual)
         
     Returns:
         Initialized RAG QnA agent

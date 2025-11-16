@@ -27,7 +27,7 @@ MESSAGES_API_URL = os.getenv(
 MESSAGES_API_KEY = os.getenv("MESSAGES_API_KEY")
 
 
-def fetch_all_messages(api_url: str = MESSAGES_API_URL, limit: int = 10000) -> List[Dict]:
+def fetch_all_messages(api_url: str = MESSAGES_API_URL, limit: int = None) -> List[Dict]:
     """
     Fetch all messages from the API.
     
@@ -42,7 +42,11 @@ def fetch_all_messages(api_url: str = MESSAGES_API_URL, limit: int = 10000) -> L
         Exception: If API request fails
     """
     try:
-        logger.info(f"Fetching messages from {api_url}")
+        # Use environment variable for limit, default to 1000 for memory optimization
+        if limit is None:
+            limit = int(os.getenv("MAX_MESSAGES_LIMIT", "1000"))
+        
+        logger.info(f"Fetching messages from {api_url} (limit={limit})")
         
         # Prepare headers with authentication if API key is available
         headers = {}

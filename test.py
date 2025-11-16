@@ -140,12 +140,12 @@ def test_rag_agent_initialization() -> Any:
         from langgraph_agent import QnAAgent
         
         console.print("[dim]Initializing RAG agent with:[/dim]")
-        console.print("[dim]  • LLM: gpt-4o-mini[/dim]")
+        console.print("[dim]  • LLM: gpt-5-nano[/dim]")
         console.print("[dim]  • Embeddings: text-embedding-3-small[/dim]")
         console.print("[dim]  • Retrieval: Top 5 documents[/dim]\n")
         
         agent = QnAAgent(
-            llm_model="gpt-4o-mini",
+            llm_model="gpt-5-nano",
             embedding_model="text-embedding-3-small",
             k=5,
         )

@@ -31,7 +31,7 @@ class RAGNodes:
     This class holds the node functions and manages the FAISS vector store.
     """
     
-    def __init__(self, llm, embeddings, api_url: str, index_dir: str = "./faiss_index", k: int = 10, doc_strategy: str = "hybrid"):
+    def __init__(self, llm, embeddings, api_url: str, index_dir: str = "./faiss_index", k: int = 5, doc_strategy: str = "individual"):
         """
         Initialize RAG nodes.
         
@@ -40,8 +40,9 @@ class RAGNodes:
             embeddings: OpenAI embeddings instance
             api_url: URL for the messages API
             index_dir: Directory to save/load FAISS index
-            k: Number of documents to retrieve (default increased to 10 for better coverage)
+            k: Number of documents to retrieve (default: 5, optimized for memory)
             doc_strategy: Document creation strategy ("individual", "aggregated", or "hybrid")
+                        Note: "hybrid" uses 2x memory, use "individual" for memory-constrained environments
         """
         self.llm = llm
         self.embeddings = embeddings

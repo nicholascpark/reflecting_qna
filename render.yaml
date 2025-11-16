@@ -2,8 +2,10 @@ services:
   - type: web
     name: reflecting-qna-api
     env: python
+    # Memory optimizations for starter pack
+    plan: starter  # 512MB RAM limit
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 10
     envVars:
       - key: OPENAI_API_KEY
         sync: false
@@ -13,5 +15,12 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
+      # Memory optimization settings
+      - key: MAX_MESSAGES_LIMIT
+        value: 1000  # Reduced from 10000
+      - key: DOC_STRATEGY
+        value: individual  # Use individual instead of hybrid to save memory
+      - key: RETRIEVAL_K
+        value: 5  # Reduced from 10
     healthCheckPath: /health
 
