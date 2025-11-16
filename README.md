@@ -1,36 +1,53 @@
-# Reflecting QnA
+# Member QnA API
 
-Ask natural language questions about member messages and get instant AI-powered answers.
+AI-powered question-answering system for member messages. Ask questions in plain English and get instant answers.
+
+**🚀 Live API:** https://message-qna.onrender.com/
+
+**📚 Interactive Docs:** https://message-qna.onrender.com/docs
+
+---
+
+## What is this?
+
+This API lets you ask natural language questions about member data and messages, and get AI-generated answers based on the stored information.
 
 ## How to Use
 
-**Deployed URL:** `https://your-deployed-app.onrender.com`
+### Option 1: Try it in Your Browser
 
-### Quick Example
+Visit the interactive documentation: **https://message-qna.onrender.com/docs**
+
+1. Click on the **POST /ask** endpoint
+2. Click **"Try it out"**
+3. Enter your question in the JSON format
+4. Click **"Execute"**
+
+### Option 2: Use cURL (Command Line)
 
 ```bash
-curl -X POST "https://your-deployed-app.onrender.com/ask" \
+curl -X POST "https://message-qna.onrender.com/ask" \
   -H "Content-Type: application/json" \
   -d '{"question": "When is Layla planning her trip to London?"}'
 ```
 
-### Using Python
+### Option 3: Use Python
 
 ```python
 import requests
 
 response = requests.post(
-    "https://your-deployed-app.onrender.com/ask",
+    "https://message-qna.onrender.com/ask",
     json={"question": "When is Layla planning her trip to London?"}
 )
 
 print(response.json()["answer"])
 ```
 
-### Using JavaScript
+### Option 4: Use JavaScript/Node.js
 
 ```javascript
-fetch("https://your-deployed-app.onrender.com/ask", {
+fetch("https://message-qna.onrender.com/ask", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ 
@@ -41,16 +58,19 @@ fetch("https://your-deployed-app.onrender.com/ask", {
   .then(data => console.log(data.answer));
 ```
 
-### Try These Questions
+---
+
+## Example Questions to Try
 
 - "When is Layla planning her trip to London?"
 - "What restaurants has Michael mentioned?"
 - "Who is interested in Italian food?"
 - "What are Sarah's hobbies?"
+- "Who has talked about traveling?"
 
-## Response Format
+## What You'll Get Back
 
-The API returns a JSON response with your answer:
+The API returns a simple JSON response:
 
 ```json
 {
@@ -58,31 +78,50 @@ The API returns a JSON response with your answer:
 }
 ```
 
-## Performance
+## Response Times
 
-- **First request:** ~3-5 seconds (loading models)
-- **Subsequent requests:** ~1-2 seconds
-- **Tip:** Visit `/docs` for interactive API documentation
+- **First request after deployment:** 2-4 seconds (the system needs to load)
+- **After that:** 1-3 seconds per question
+
+💡 **Tip:** The first request might be slower. Be patient!
 
 ---
 
-## For Developers
+## API Endpoints
 
-### Local Setup
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ask` | POST | Ask a question about member data |
+| `/docs` | GET | Interactive API documentation (try this!) |
+| `/redoc` | GET | Alternative documentation view |
+| `/health` | GET | Check if the API is running |
+| `/warmup` | POST | Pre-load the system (for faster first requests) |
+
+---
+
+## For Developers: Running Locally
+
+If you want to run this on your own machine:
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Create your environment file
 cp example.env .env
-# Add your OPENAI_API_KEY and MESSAGES_API_KEY
+
+# Add your API keys to .env file
+# OPENAI_API_KEY=your_key_here
+# MESSAGES_API_KEY=your_key_here
+
+# Run the application
 python -m app.main
 ```
 
-### Additional Endpoints
+The API will start at http://localhost:8000
 
-- `GET /health` - Health check
-- `POST /warmup` - Pre-load models (reduces first request latency)
-- `POST /clear-cache` - Refresh member data
+### Technical Documentation
 
-### Technical Details
-
-See [MEMORY_OPTIMIZATION_GUIDE.md](./MEMORY_OPTIMIZATION_GUIDE.md) for implementation details.
+For implementation details and optimization guides:
+- [MEMORY_OPTIMIZATION_GUIDE.md](./MEMORY_OPTIMIZATION_GUIDE.md)
+- [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
