@@ -146,44 +146,59 @@ class RAGNodes:
     
     def _expand_query(self, question: str) -> List[str]:
         """
-        Expand the query for better coverage, especially for counting questions.
+        Expand the query for better coverage across different question types.
         
-        OPTIMIZED FOR MEMORY: Limits to max 2 queries to reduce semantic search calls.
+        OPTIMIZED FOR MEMORY: Limits to max 2-3 queries to reduce semantic search calls.
         
-        For questions like "How many cars does X have?", we expand to:
-        - The original question
-        - "X cars" (most relevant expansion)
+        Handles:
+        - Counting questions: "How many cars does X have?" -> ["original", "X cars"]
+        - Who questions: "Who has travel plans?" -> ["original", "travel vacation trip"]
+        - What questions with names: "What are X's restaurants?" -> ["original", "X restaurants dining"]
         """
         queries = [question]
         
         question_lower = question.lower()
         
-        # Detect counting/enumeration questions
-        counting_keywords = ['how many', 'count', 'number of', 'list all', 'what are all']
-        is_counting = any(keyword in question_lower for keyword in counting_keywords)
+        # Detect question type
+        is_who_question = question_lower.startswith('who ')
+        is_what_question = question_lower.startswith('what ')
+        is_counting = any(keyword in question_lower for keyword in ['how many', 'count', 'number of', 'list all', 'what are all'])
         
-        # Detect the subject (cars, restaurants, etc.)
-        subjects = {
-            'car': ['cars', 'vehicles', 'BMW', 'Mercedes', 'Tesla'],
-            'restaurant': ['restaurants', 'dining', 'food'],
-            'trip': ['trips', 'travel', 'vacation'],
-            'hotel': ['hotels', 'accommodations'],
+        # Detect the subject/topic with expanded keywords
+        subject_keywords = {
+            'travel': ['travel', 'trip', 'trips', 'vacation', 'journey', 'visit', 'visiting'],
+            'car': ['car', 'cars', 'vehicle', 'vehicles', 'BMW', 'Mercedes', 'Tesla', 'automobile'],
+            'restaurant': ['restaurant', 'restaurants', 'dining', 'food', 'Italian', 'cuisine', 'eatery'],
+            'hotel': ['hotel', 'hotels', 'accommodation', 'stay', 'staying'],
         }
         
-        detected_subject = None
-        for subject, keywords in subjects.items():
+        detected_topics = []
+        for topic, keywords in subject_keywords.items():
             if any(keyword in question_lower for keyword in keywords):
-                detected_subject = subject
-                break
+                detected_topics.append((topic, keywords))
         
         # Extract names from question
         names = self._extract_names_from_question(question)
         
-        # OPTIMIZED: Add only ONE most relevant expanded query
-        if is_counting and names and detected_subject:
-            # Use only the first detected name for expansion to save memory
+        # OPTIMIZED: Add ONE most relevant expanded query based on question type
+        if is_who_question and detected_topics:
+            # For "Who has X?" questions, expand with topic synonyms
+            topic, keywords = detected_topics[0]
+            # Use top 3 most relevant synonyms
+            synonym_query = ' '.join(keywords[:3])
+            queries.append(synonym_query)
+        elif is_counting and names and detected_topics:
+            # For counting with name: "How many cars does X have?"
             name = names[0]
-            queries.append(f"{name} {detected_subject}")
+            topic = detected_topics[0][0]
+            queries.append(f"{name} {topic}")
+        elif names and detected_topics:
+            # For name-based questions: "What are X's restaurants?"
+            name = names[0]
+            topic = detected_topics[0][0]
+            # Add name + topic keywords
+            topic_keywords = detected_topics[0][1][:2]  # Use top 2 keywords
+            queries.append(f"{name} {' '.join(topic_keywords)}")
         
         logger.info(f"Expanded query to {len(queries)} variants: {queries}")
         return queries
@@ -192,19 +207,35 @@ class RAGNodes:
         """
         Extract potential user names from the question.
         
-        Simple heuristic: look for capitalized words that might be names.
+        Enhanced heuristic: looks for capitalized words and common name patterns.
         """
         import re
         # Look for capitalized words (simple name detection)
         words = question.split()
         names = []
+        
+        # Common question words and pronouns to skip
+        skip_words = {
+            'who', 'what', 'when', 'where', 'why', 'how', 'which', 'whose',
+            'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'ours',
+            'you', 'your', 'yours', 'he', 'him', 'his', 'she', 'her', 'hers',
+            'it', 'its', 'they', 'them', 'their', 'theirs',
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'january', 'february', 'march', 'april', 'may', 'june',
+            'july', 'august', 'september', 'october', 'november', 'december'
+        }
+        
         for word in words:
             # Remove punctuation and check if it's capitalized
             clean_word = re.sub(r'[^\w\s]', '', word)
-            if clean_word and clean_word[0].isupper() and len(clean_word) > 1:
-                # Common question words to skip
-                if clean_word.lower() not in ['who', 'what', 'when', 'where', 'why', 'how', 'which']:
-                    names.append(clean_word)
+            if clean_word and len(clean_word) > 1:
+                # Check if first letter is uppercase
+                if clean_word[0].isupper():
+                    # Skip common question words
+                    if clean_word.lower() not in skip_words:
+                        names.append(clean_word)
+        
+        logger.info(f"Extracted potential names from question: {names}")
         return names
     
     def _boost_user_documents(self, top_docs: List[Tuple[Document, float]], names: List[str]) -> List[Tuple[Document, float]]:
@@ -212,6 +243,7 @@ class RAGNodes:
         Boost documents from specific users by retrieving more of their messages.
         
         OPTIMIZED FOR MEMORY: Limits additional searches and result size.
+        Handles name variations for better matching.
         """
         # OPTIMIZED: Only process first name to reduce memory usage
         if not names:
@@ -222,15 +254,17 @@ class RAGNodes:
         # Get additional documents from the specific user (OPTIMIZED: fetch fewer)
         enhanced_docs = list(top_docs)
         
-        # Search for more documents from this user (OPTIMIZED: k//2 instead of k)
-        filter_query = f"{name} messages"
-        additional_docs = semantic_search(self._vectorstore, filter_query, k=max(2, self.k // 2))
+        # Search for more documents from this user with multiple name variations
+        # For names like "Amira", also try "Amina" or similar
+        filter_query = f"{name} says messages"
+        additional_docs = semantic_search(self._vectorstore, filter_query, k=max(3, self.k // 2))
         
         # Add documents that are from the target user and not already in top_docs
         existing_contents = {doc.page_content for doc, _ in enhanced_docs}
         for doc, score in additional_docs:
             doc_user = doc.metadata.get("user_name", "")
-            if name.lower() in doc_user.lower() and doc.page_content not in existing_contents:
+            # Check for name match with fuzzy matching (handles variations)
+            if self._name_matches(name, doc_user) and doc.page_content not in existing_contents:
                 # Boost the score slightly for user-matched documents
                 enhanced_docs.append((doc, score * 0.95))  # Slight boost
                 existing_contents.add(doc.page_content)
@@ -240,6 +274,37 @@ class RAGNodes:
         
         # OPTIMIZED: Return only k docs (not k*1.5) to save memory
         return enhanced_docs[:self.k]
+    
+    def _name_matches(self, query_name: str, doc_user_name: str) -> bool:
+        """
+        Check if a query name matches a document user name.
+        
+        Handles variations like:
+        - Exact match: "Layla" matches "Layla Kawaguchi"
+        - Partial match: "Amira" might match "Amina" (if close enough)
+        - Case insensitive
+        """
+        query_lower = query_name.lower()
+        doc_lower = doc_user_name.lower()
+        
+        # Direct substring match
+        if query_lower in doc_lower:
+            return True
+        
+        # Check if the query name is similar to any part of the doc name
+        # Simple similarity: if 80%+ of characters match in order
+        doc_parts = doc_lower.split()
+        for part in doc_parts:
+            if len(query_lower) >= 3 and len(part) >= 3:
+                # Calculate simple character overlap
+                matching_chars = sum(1 for i, c in enumerate(query_lower) 
+                                   if i < len(part) and c == part[i])
+                similarity = matching_chars / max(len(query_lower), len(part))
+                if similarity >= 0.75:  # 75% similarity threshold
+                    logger.info(f"Fuzzy name match: '{query_name}' ~= '{part}' in '{doc_user_name}'")
+                    return True
+        
+        return False
     
     def generate_answer(self, state: AgentState) -> AgentState:
         """
@@ -262,14 +327,16 @@ The context includes messages retrieved via semantic search - they are the most 
 
 IMPORTANT INSTRUCTIONS:
 - Be specific and cite the member's name when providing information.
-- For date/time questions, look at the timestamp information carefully.
+- For date/time questions, extract specific dates, days of the week, or time periods mentioned in messages. If a timestamp is provided, use it to give context like "in March 2024" or specific dates.
 - For counting questions (how many, count, list), count ALL unique items mentioned across ALL messages provided.
 - When asked "how many X does Y have?", interpret this as "how many X are mentioned by/about Y?"
   Examples: "how many cars" = count all car types/brands mentioned (BMW, Tesla, Mercedes, etc.)
-- For aggregation questions, look across ALL the provided messages to gather complete information.
+- For aggregation questions like "Who has travel plans?" or "Who likes X?", review EVERY message in the context and list ALL members mentioned. Be exhaustive.
 - Some messages are aggregated (grouped together) and some are individual - use all of them.
 - If you see the same information repeated across multiple messages, count unique items only once.
-- When counting, list out what you're counting to be transparent and provide the total.
+- When listing people or items, be thorough and check all messages before responding.
+- For name-based queries, consider common name variations (e.g., Amira might be Amina, or vice versa) - if you find a similar name, mention it.
+- When counting or listing, show your work by mentioning what you found to be transparent.
 - If truly no relevant information exists in the context, say so honestly."""
 
         user_prompt = f"""Question: {question}

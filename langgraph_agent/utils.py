@@ -279,7 +279,7 @@ def format_retrieved_context(top_docs: List[Tuple[Document, float]]) -> str:
     """
     Format retrieved documents into a context string for the LLM.
     
-    OPTIMIZED FOR MEMORY: More compact formatting to reduce token/memory usage.
+    OPTIMIZED FOR MEMORY: Compact formatting with essential timestamp info.
     
     Args:
         top_docs: List of tuples (Document, similarity_score)
@@ -292,11 +292,20 @@ def format_retrieved_context(top_docs: List[Tuple[Document, float]]) -> str:
     for i, (doc, score) in enumerate(top_docs, 1):
         user_name = doc.metadata.get("user_name", "Unknown")
         message = doc.metadata.get("message", doc.page_content)
-        # OPTIMIZED: Removed timestamp from context to save tokens/memory
-        # Timestamp is less critical for most queries
+        timestamp = doc.metadata.get("timestamp", "")
         
-        # More compact format
-        context_parts.append(f"[{i}] {user_name}: {message}")
+        # OPTIMIZED: Extract only date from timestamp (YYYY-MM-DD format)
+        # This provides date context for accuracy without excessive tokens
+        date_str = ""
+        if timestamp:
+            try:
+                # Extract just the date part (first 10 chars: YYYY-MM-DD)
+                date_str = f" ({timestamp[:10]})"
+            except:
+                pass
+        
+        # Compact format with optional date
+        context_parts.append(f"[{i}] {user_name}{date_str}: {message}")
     
     # OPTIMIZED: Use simpler separator to save memory
     context = "\n\n".join(context_parts)
