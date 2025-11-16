@@ -43,3 +43,7 @@ faiss_index/
 index.faiss
 index.pkl
 
+# Markdown files (except README.md)
+*.md
+!README.md
+
