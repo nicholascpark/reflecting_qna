@@ -113,6 +113,8 @@ async def ask_question(request: QuestionRequest):
     - Subsequent requests: ~1-2 seconds (uses cached index)
     - Main latency: OpenAI API call (~1-2 seconds)
     
+    Memory optimized for 512MB environments (Render starter pack).
+    
     Args:
         request: QuestionRequest containing the question
         
@@ -123,6 +125,8 @@ async def ask_question(request: QuestionRequest):
         HTTPException: If question is empty or processing fails
     """
     import time
+    import gc
+    
     start_time = time.time()
     
     try:
@@ -137,6 +141,9 @@ async def ask_question(request: QuestionRequest):
         # Get answer from agent
         answer = agent.ask(request.question)
         
+        # MEMORY OPTIMIZATION: Force garbage collection after request
+        gc.collect()
+        
         elapsed_time = time.time() - start_time
         logger.info(f"Generated answer in {elapsed_time:.2f}s: {answer[:100]}...")
         
@@ -146,6 +153,9 @@ async def ask_question(request: QuestionRequest):
         raise
     except Exception as e:
         logger.error(f"Error processing question: {str(e)}")
+        # Force GC even on error to clean up partial state
+        import gc
+        gc.collect()
         raise HTTPException(
             status_code=500,
             detail=f"Error processing question: {str(e)}"

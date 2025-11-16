@@ -31,6 +31,8 @@ def fetch_all_messages(api_url: str = MESSAGES_API_URL, limit: int = None) -> Li
     """
     Fetch all messages from the API.
     
+    OPTIMIZED FOR MEMORY: Uses conservative default limit.
+    
     Args:
         api_url: URL of the messages API endpoint
         limit: Maximum number of messages to fetch
@@ -42,9 +44,9 @@ def fetch_all_messages(api_url: str = MESSAGES_API_URL, limit: int = None) -> Li
         Exception: If API request fails
     """
     try:
-        # Use environment variable for limit, default to 1000 for memory optimization
+        # OPTIMIZED: Use environment variable for limit, default to 500 for memory optimization
         if limit is None:
-            limit = int(os.getenv("MAX_MESSAGES_LIMIT", "1000"))
+            limit = int(os.getenv("MAX_MESSAGES_LIMIT", "500"))
         
         logger.info(f"Fetching messages from {api_url} (limit={limit})")
         
@@ -277,6 +279,8 @@ def format_retrieved_context(top_docs: List[Tuple[Document, float]]) -> str:
     """
     Format retrieved documents into a context string for the LLM.
     
+    OPTIMIZED FOR MEMORY: More compact formatting to reduce token/memory usage.
+    
     Args:
         top_docs: List of tuples (Document, similarity_score)
         
@@ -288,12 +292,13 @@ def format_retrieved_context(top_docs: List[Tuple[Document, float]]) -> str:
     for i, (doc, score) in enumerate(top_docs, 1):
         user_name = doc.metadata.get("user_name", "Unknown")
         message = doc.metadata.get("message", doc.page_content)
-        timestamp = doc.metadata.get("timestamp", "unknown time")
+        # OPTIMIZED: Removed timestamp from context to save tokens/memory
+        # Timestamp is less critical for most queries
         
-        context_parts.append(
-            f"[{i}] {user_name} (at {timestamp}) [relevance: {score:.4f}]:\n{message}"
-        )
+        # More compact format
+        context_parts.append(f"[{i}] {user_name}: {message}")
     
-    context = "\n\n---\n\n".join(context_parts)
+    # OPTIMIZED: Use simpler separator to save memory
+    context = "\n\n".join(context_parts)
     return context
 

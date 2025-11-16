@@ -73,7 +73,8 @@ class QnAAgent:
         self.embedding_model = embedding_model
         self.index_dir = index_dir
         # Use environment variables for memory optimization
-        self.k = k if k is not None else int(os.getenv("RETRIEVAL_K", "5"))
+        # OPTIMIZED: Default k reduced from 5 to 3 for better memory usage
+        self.k = k if k is not None else int(os.getenv("RETRIEVAL_K", "3"))
         self.doc_strategy = doc_strategy if doc_strategy is not None else os.getenv("DOC_STRATEGY", "individual")
         
         api_key = openai_api_key or OPENAI_API_KEY

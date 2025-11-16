@@ -31,7 +31,7 @@ class RAGNodes:
     This class holds the node functions and manages the FAISS vector store.
     """
     
-    def __init__(self, llm, embeddings, api_url: str, index_dir: str = "./faiss_index", k: int = 5, doc_strategy: str = "individual"):
+    def __init__(self, llm, embeddings, api_url: str, index_dir: str = "./faiss_index", k: int = 3, doc_strategy: str = "individual"):
         """
         Initialize RAG nodes.
         
@@ -40,7 +40,7 @@ class RAGNodes:
             embeddings: OpenAI embeddings instance
             api_url: URL for the messages API
             index_dir: Directory to save/load FAISS index
-            k: Number of documents to retrieve (default: 5, optimized for memory)
+            k: Number of documents to retrieve (default: 3, OPTIMIZED for 512MB memory)
             doc_strategy: Document creation strategy ("individual", "aggregated", or "hybrid")
                         Note: "hybrid" uses 2x memory, use "individual" for memory-constrained environments
         """
@@ -111,7 +111,7 @@ class RAGNodes:
         
         question = state["question"]
         
-        # Expand query for counting/enumeration questions
+        # Expand query for counting/enumeration questions (OPTIMIZED: max 2 queries)
         expanded_queries = self._expand_query(question)
         
         # Perform semantic search with all queries
@@ -123,20 +123,21 @@ class RAGNodes:
                 if content not in all_docs or all_docs[content][1] > score:
                     all_docs[content] = (doc, score)
         
-        # Convert back to list and sort by score
-        top_docs = sorted(all_docs.values(), key=lambda x: x[1])[:self.k * 2]
+        # Convert back to list and sort by score (OPTIMIZED: limit to k docs only)
+        top_docs = sorted(all_docs.values(), key=lambda x: x[1])[:self.k]
         
         # Extract potential user names from question for hybrid retrieval
         extracted_names = self._extract_names_from_question(question)
         
-        # If we detected a name, boost results from that user
+        # If we detected a name, boost results from that user (OPTIMIZED: limited boosting)
         if extracted_names:
             logger.info(f"Detected name(s) in question: {extracted_names}")
             top_docs = self._boost_user_documents(top_docs, extracted_names)
         
-        # Format context for LLM
+        # Format context for LLM (memory-optimized)
         context = format_retrieved_context(top_docs)
         
+        # Store only essential data to reduce memory
         state["top_docs"] = top_docs
         state["relevant_context"] = context
         
@@ -147,11 +148,11 @@ class RAGNodes:
         """
         Expand the query for better coverage, especially for counting questions.
         
+        OPTIMIZED FOR MEMORY: Limits to max 2 queries to reduce semantic search calls.
+        
         For questions like "How many cars does X have?", we expand to:
         - The original question
-        - "X's cars vehicles"
-        - "X mentioned cars"
-        etc.
+        - "X cars" (most relevant expansion)
         """
         queries = [question]
         
@@ -163,10 +164,10 @@ class RAGNodes:
         
         # Detect the subject (cars, restaurants, etc.)
         subjects = {
-            'car': ['cars', 'vehicles', 'car service', 'BMW', 'Mercedes', 'Tesla', 'Bentley', 'Aston Martin'],
-            'restaurant': ['restaurants', 'dining', 'eateries', 'food'],
-            'trip': ['trips', 'travel', 'vacation', 'journey'],
-            'hotel': ['hotels', 'accommodations', 'stays'],
+            'car': ['cars', 'vehicles', 'BMW', 'Mercedes', 'Tesla'],
+            'restaurant': ['restaurants', 'dining', 'food'],
+            'trip': ['trips', 'travel', 'vacation'],
+            'hotel': ['hotels', 'accommodations'],
         }
         
         detected_subject = None
@@ -178,17 +179,13 @@ class RAGNodes:
         # Extract names from question
         names = self._extract_names_from_question(question)
         
-        # If it's a counting question with a name and subject, add expanded queries
+        # OPTIMIZED: Add only ONE most relevant expanded query
         if is_counting and names and detected_subject:
-            for name in names:
-                queries.append(f"{name} {detected_subject}")
-                queries.append(f"{name} mentions {detected_subject}")
-                queries.append(f"{name}'s {detected_subject}")
-                if detected_subject in subjects:
-                    for keyword in subjects[detected_subject][:3]:
-                        queries.append(f"{name} {keyword}")
+            # Use only the first detected name for expansion to save memory
+            name = names[0]
+            queries.append(f"{name} {detected_subject}")
         
-        logger.info(f"Expanded query to {len(queries)} variants: {queries[:3]}...")
+        logger.info(f"Expanded query to {len(queries)} variants: {queries}")
         return queries
     
     def _extract_names_from_question(self, question: str) -> List[str]:
@@ -214,34 +211,41 @@ class RAGNodes:
         """
         Boost documents from specific users by retrieving more of their messages.
         
-        This helps ensure we get ALL relevant information about a specific person.
+        OPTIMIZED FOR MEMORY: Limits additional searches and result size.
         """
-        # Get additional documents from the specific user(s)
+        # OPTIMIZED: Only process first name to reduce memory usage
+        if not names:
+            return top_docs
+        
+        name = names[0]  # Only boost for the first detected name
+        
+        # Get additional documents from the specific user (OPTIMIZED: fetch fewer)
         enhanced_docs = list(top_docs)
         
-        for name in names:
-            # Search for more documents from this user
-            filter_query = f"{name}'s messages"
-            additional_docs = semantic_search(self._vectorstore, filter_query, k=self.k)
-            
-            # Add documents that are from the target user and not already in top_docs
-            existing_contents = {doc.page_content for doc, _ in enhanced_docs}
-            for doc, score in additional_docs:
-                doc_user = doc.metadata.get("user_name", "")
-                if name.lower() in doc_user.lower() and doc.page_content not in existing_contents:
-                    # Boost the score slightly for user-matched documents
-                    enhanced_docs.append((doc, score * 0.95))  # Slight boost
-                    existing_contents.add(doc.page_content)
+        # Search for more documents from this user (OPTIMIZED: k//2 instead of k)
+        filter_query = f"{name} messages"
+        additional_docs = semantic_search(self._vectorstore, filter_query, k=max(2, self.k // 2))
+        
+        # Add documents that are from the target user and not already in top_docs
+        existing_contents = {doc.page_content for doc, _ in enhanced_docs}
+        for doc, score in additional_docs:
+            doc_user = doc.metadata.get("user_name", "")
+            if name.lower() in doc_user.lower() and doc.page_content not in existing_contents:
+                # Boost the score slightly for user-matched documents
+                enhanced_docs.append((doc, score * 0.95))  # Slight boost
+                existing_contents.add(doc.page_content)
         
         # Sort by score (lower is better in FAISS distance metric)
         enhanced_docs.sort(key=lambda x: x[1])
         
-        # Return top k*1.5 to give LLM more context for counting/aggregation questions
-        return enhanced_docs[:int(self.k * 1.5)]
+        # OPTIMIZED: Return only k docs (not k*1.5) to save memory
+        return enhanced_docs[:self.k]
     
     def generate_answer(self, state: AgentState) -> AgentState:
         """
         Node: Generate answer using LLM with retrieved context.
+        
+        OPTIMIZED FOR MEMORY: Cleans up state after generation.
         
         Args:
             state: Current agent state with question and relevant_context
@@ -283,11 +287,16 @@ Please answer the question based on the context provided above. Be concise and a
         answer = response.content.strip()
         state["answer"] = answer
         
-        # Add to conversation history
-        state["messages"].extend([
+        # OPTIMIZED: Don't store full conversation history to save memory
+        # Only keep minimal message history
+        state["messages"] = [
             HumanMessage(content=question),
             AIMessage(content=answer)
-        ])
+        ]
+        
+        # OPTIMIZED: Clear large objects from state to free memory
+        state["top_docs"] = []  # Clear document references
+        state["relevant_context"] = ""  # Clear context string
         
         logger.info(f"Generated answer: {answer[:100]}...")
         return state
