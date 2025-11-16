@@ -8,7 +8,7 @@ FastAPI service that performs semantic search over member data using:
 - **FAISS** for vector storage and similarity search
 - **OpenAI embeddings** (text-embedding-3-small) for semantic retrieval
 - **LangGraph** for workflow orchestration
-- **gpt-4o-mini** for answer generation
+- **gpt-5-nano** for answer generation
 
 ## Quick Start
 
